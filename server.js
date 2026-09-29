@@ -1,8 +1,39 @@
 const express = require("express");
 
+const { Pool } = require("pg");
+
 const app = express();
 
 app.use(express.json());
+
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false
+    }
+});
+
+async function initializeDatabase() {
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS devices (
+            device_id TEXT PRIMARY KEY,
+            paired BOOLEAN DEFAULT FALSE,
+            receiver_id TEXT,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+    `);
+
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS notifications (
+            id BIGSERIAL PRIMARY KEY,
+            device_id TEXT REFERENCES devices(device_id),
+            package_name TEXT,
+            title TEXT,
+            text TEXT,
+            received_at TIMESTAMPTZ DEFAULT NOW()
+        );
+    `);
+}
 
 const PORT = process.env.PORT || 3000;
 
@@ -153,6 +184,12 @@ app.get("/api/notifications/:deviceId", (req, res) => {
    Start Server
 ========================= */
 
-app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Notification API running on port ${PORT}`);
-});
+initializeDatabase()
+    .then(() => {
+        app.listen(PORT, "0.0.0.0", () => {
+            console.log(`Notification API running on port ${PORT}`);
+        });
+    })
+    .catch((error) => {
+        console.error("Database initialization failed:", error);
+    });

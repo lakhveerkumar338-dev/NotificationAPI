@@ -6,11 +6,14 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// Temporary in-memory pairing storage
+// Temporary in-memory storage
 const devices = {};
 const notifications = {};
 
-// Generate a simple 6-character pairing code
+/* =========================
+   Generate Pairing Code
+========================= */
+
 function generatePairingCode() {
     return Math.random()
         .toString(36)
@@ -18,58 +21,39 @@ function generatePairingCode() {
         .toUpperCase();
 }
 
-// Home
+/* =========================
+   Home
+========================= */
+
 app.get("/", (req, res) => {
     res.json({
         message: "Notification API is running"
     });
 });
 
-// Generate pairing code
-app.post("/api/notifications", (req, res) => {
+/* =========================
+   Generate Pairing Code
+========================= */
 
-    const {
-        deviceId,
-        packageName,
-        title,
-        text
-    } = req.body;
+app.post("/api/pair/generate", (req, res) => {
 
-    // Check whether source device exists
-    if (!deviceId || !devices[deviceId]) {
-        return res.status(400).json({
-            success: false,
-            message: "Invalid or missing deviceId"
-        });
-    }
+    const deviceId = generatePairingCode();
 
-    // Create notification storage for this device
-    if (!notifications[deviceId]) {
-        notifications[deviceId] = [];
-    }
-
-    // Store notification
-    notifications[deviceId].push({
-        packageName: packageName || "",
-        title: title || "",
-        text: text || "",
-        receivedAt: new Date().toISOString()
-    });
-
-    console.log("========== NOTIFICATION ==========");
-    console.log("Device:", deviceId);
-    console.log("Package:", packageName);
-    console.log("Title:", title);
-    console.log("Text:", text);
-    console.log("===================================");
+    devices[deviceId] = {
+        paired: false,
+        receiverId: null
+    };
 
     res.json({
         success: true,
-        message: "Notification received and stored"
+        deviceId: deviceId
     });
 });
 
-// Receive and store notification
+/* =========================
+   Connect Receiver
+========================= */
+
 app.post("/api/pair/connect", (req, res) => {
 
     const { deviceId, receiverId } = req.body;
@@ -97,7 +81,57 @@ app.post("/api/pair/connect", (req, res) => {
     });
 });
 
-// Receive notification
+/* =========================
+   Receive Notification
+========================= */
+
+app.post("/api/notifications", (req, res) => {
+
+    const {
+        deviceId,
+        packageName,
+        title,
+        text
+    } = req.body;
+
+    // Check source device
+    if (!deviceId || !devices[deviceId]) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid or missing deviceId"
+        });
+    }
+
+    // Create notification list
+    if (!notifications[deviceId]) {
+        notifications[deviceId] = [];
+    }
+
+    // Store notification
+    notifications[deviceId].push({
+        packageName: packageName || "",
+        title: title || "",
+        text: text || "",
+        receivedAt: new Date().toISOString()
+    });
+
+    console.log("========== NOTIFICATION ==========");
+    console.log("Device:", deviceId);
+    console.log("Package:", packageName);
+    console.log("Title:", title);
+    console.log("Text:", text);
+    console.log("===================================");
+
+    res.json({
+        success: true,
+        message: "Notification received and stored"
+    });
+});
+
+/* =========================
+   Get Notifications
+========================= */
+
 app.get("/api/notifications/:deviceId", (req, res) => {
 
     const { deviceId } = req.params;
@@ -114,6 +148,10 @@ app.get("/api/notifications/:deviceId", (req, res) => {
         notifications: notifications[deviceId] || []
     });
 });
+
+/* =========================
+   Start Server
+========================= */
 
 app.listen(PORT, "0.0.0.0", () => {
     console.log(`Notification API running on port ${PORT}`);
